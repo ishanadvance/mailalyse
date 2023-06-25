@@ -40,7 +40,7 @@ To run the script, follow these steps:
 4. Update the configuration values according to your email and Excel settings.
 5. Save the changes to the file.
 6. Open a terminal or command prompt and navigate to the directory where the script is located.
-7. Run the script using the following command: `python email_processing.py`
+7. Run the script using the following command: `python email_processing.py` or `python3 email_processing.py`
 
 The script will connect to the specified IMAP server, retrieve the emails, process them, and save the extracted data into an Excel file.
 

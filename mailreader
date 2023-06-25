@@ -1,0 +1,100 @@
+import imaplib
+import email
+import datetime
+import openpyxl
+
+# IMAP Configuration
+IMAP_SERVER = 'imap.gmail.com'
+IMAP_PORT = 993
+
+# Email Account Configuration
+EMAIL_USERNAME = 'your-mail'
+EMAIL_PASSWORD = 'your-password'
+
+# Excel Configuration
+EXCEL_FILENAME = 'email_data.xlsx'
+EXCEL_SHEETNAME = 'Emails'
+
+# Progress Tracking Configuration
+BATCH_SIZE = 100
+
+# Connect to the IMAP server
+imap_server = imaplib.IMAP4_SSL(IMAP_SERVER, IMAP_PORT)
+imap_server.login(EMAIL_USERNAME, EMAIL_PASSWORD)
+imap_server.select('INBOX')
+
+# Retrieve email UIDs
+status, response = imap_server.uid('search', None, 'ALL')
+email_uids = response[0].split()
+
+# Total number of emails
+total_emails = len(email_uids)
+
+# Create a workbook and sheet
+wb = openpyxl.Workbook()
+ws = wb.active
+ws.title = EXCEL_SHEETNAME
+
+# Excel header row
+header = ['Email ID', 'Sender', 'Subject', 'Date', 'Attachment Names', 'Attachment Sizes']
+ws.append(header)
+
+# Progress tracking variables
+processed_emails = 0
+progress = 0
+
+# Process emails in batches
+while processed_emails < total_emails:
+    email_batch = email_uids[processed_emails:processed_emails+BATCH_SIZE]
+    for email_uid in email_batch:
+        try:
+            email_response = imap_server.uid('fetch', email_uid, '(RFC822)')
+            if email_response[0] == 'OK':
+                email_data = email_response[1][0][1]
+                email_msg = email.message_from_bytes(email_data)
+                email_id = email_msg['Message-ID'] or f'No Message-ID ({email_uid.decode()})'
+                sender = email_msg['From']
+                subject_bytes = email_msg['Subject']
+                
+                # Ensure subject_bytes is of type bytes
+                if isinstance(subject_bytes, bytes):
+                    subject = subject_bytes.decode('utf-8', 'replace')
+                else:
+                    subject = str(subject_bytes)
+                    
+                date = email_msg['Date']
+                    
+                # Process email attachments
+                attachment_names = []
+                attachment_sizes = []
+                for part in email_msg.walk():
+                    content_type = part.get_content_type()
+                    if content_type and 'application' in content_type:
+                        attachment_names.append(part.get_filename())
+                        attachment_sizes.append(len(part.get_payload(decode=True)))
+
+                # Add email data to the Excel sheet
+                row = [email_id, sender, subject, date, ', '.join(attachment_names), ', '.join(map(str, attachment_sizes))]
+                ws.append(row)
+                
+            # Update progress
+            processed_emails += 1
+            progress = processed_emails / total_emails * 100
+            print(f"Progress: {processed_emails}/{total_emails} ({progress:.2f}%)")
+
+        except Exception as e:
+            # Log the error and continue processing
+            print(f"Error processing email: {email_uid.decode()}\n{str(e)}")
+
+    # Save the workbook after processing each batch
+    wb.save(EXCEL_FILENAME)
+
+# Close the IMAP connection
+imap_server.close()
+imap_server.logout()
+
+# Save the final Excel file
+wb.save(EXCEL_FILENAME)
+print("Email processing completed. Excel file saved.")
+
+# End of code
